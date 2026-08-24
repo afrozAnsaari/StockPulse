@@ -1,7 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from enum import Enum
 from sqlmodel import Field, SQLModel
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class ProductCategory(str, Enum):
@@ -37,7 +41,7 @@ class TriggerReason(str, Enum):
 
 class Product(SQLModel, table=True):
     id: str = Field(default=None, primary_key=True)
-    sku: str = Field(index=True)
+    sku: str = Field(index=True, unique=True)
     name: str
     category: ProductCategory
     current_price: float
@@ -47,8 +51,8 @@ class Product(SQLModel, table=True):
     status: ProductStatus = Field(default=ProductStatus.ACTIVE)
     cost_price: Optional[float] = Field(default=None, nullable=True)
     supplier_id: Optional[str] = Field(default=None, nullable=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class PricingSuggestion(SQLModel, table=True):
@@ -61,8 +65,8 @@ class PricingSuggestion(SQLModel, table=True):
     reasoning: str
     status: SuggestionStatus = Field(default=SuggestionStatus.PENDING)
     trigger_reason: TriggerReason = Field(default=TriggerReason.MANUAL)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class ReorderSuggestion(SQLModel, table=True):
@@ -75,12 +79,12 @@ class ReorderSuggestion(SQLModel, table=True):
     reasoning: str
     status: SuggestionStatus = Field(default=SuggestionStatus.PENDING)
     trigger_reason: TriggerReason = Field(default=TriggerReason.MANUAL)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class Order(SQLModel, table=True):
     order_id: Optional[int] = Field(default=None, primary_key=True)
     product_id: str = Field(foreign_key="product.id", index=True)
     quantity: int = Field(default=1)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)

@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 from app.models.models import (
@@ -38,7 +38,7 @@ class ProductUpdate(BaseModel):
 
 
 class StockUpdate(BaseModel):
-    stock_level: int = Field(ge=0, description="New stock level to set")
+    stock_level: int = Field(ge=0, description="New stock level to set (cannot be negative)")
 
 
 class ProductOut(ProductBase):
@@ -53,8 +53,8 @@ class OrderBase(BaseModel):
     quantity: int = Field(default=1, gt=0, description="Order quantity must be at least 1")
 
 
-class OrderCreate(OrderBase):
-    pass
+class OrderCreate(BaseModel):
+    quantity: int = Field(default=1, gt=0, description="Order quantity must be at least 1")
 
 
 class OrderOut(OrderBase):
@@ -122,6 +122,10 @@ class StrategyConfig(BaseModel):
     active_strategy: str = Field(description="'ai' or 'rule'")
     project_name: str
     llm_model: str
+    llm_base_url: str
+    demand_spike_multiplier: float
+    price_max_multiplier: float
+    price_min_multiplier: float
 
 
 class StrategyConfigUpdate(BaseModel):
@@ -139,3 +143,10 @@ class StrategyConfigUpdate(BaseModel):
 class PendingSuggestionsOut(BaseModel):
     pricing_suggestions: List[PricingSuggestionOut]
     reorder_suggestions: List[ReorderSuggestionOut]
+
+
+class HealthResponse(BaseModel):
+    status: str
+    database: str
+    active_strategy: str
+    timestamp: datetime

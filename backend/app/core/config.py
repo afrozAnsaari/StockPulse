@@ -5,22 +5,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "StockPulse"
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./stockpulse.db")
+    DATABASE_URL: str = "sqlite:///./stockpulse.db"
     
-    # LLM Configuration
-    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
-    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "https://litellm-qc.zycus.net/v1")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "qwen-cursor")
-    LLM_PRODUCT: str = os.getenv("LLM_PRODUCT", "PC1")
+    # LLM Configuration (LiteLLM private OpenAI-compatible gateway)
+    LLM_API_KEY: str = ""
+    LLM_BASE_URL: str = "https://litellm-qc.zycus.net/v1"
+    LLM_MODEL: str = "qwen-cursor"
+    LLM_PRODUCT: str = "PC1"
+    LLM_TIMEOUT_SECONDS: float = 15.0
     
     # Strategy & Thresholds
-    ACTIVE_STRATEGY: str = os.getenv("ACTIVE_STRATEGY", "ai")  # "ai" or "rule"
+    ACTIVE_STRATEGY: str = "ai"  # "ai" or "rule"
     DEMAND_SPIKE_MULTIPLIER: float = 3.0
     PRICE_MAX_MULTIPLIER: float = 3.0
     PRICE_MIN_MULTIPLIER: float = 0.3
     
     # CORS
-    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://localhost:8000")
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://localhost:8000"
 
     model_config = SettingsConfigDict(
         case_sensitive=True,
@@ -31,6 +32,8 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
+        if not self.CORS_ORIGINS:
+            return ["http://localhost:5173"]
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
 
