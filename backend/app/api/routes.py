@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.db import get_session
 from app.core.config import settings
@@ -131,7 +131,7 @@ def create_new_product(
 ):
     """Create a new catalog product with validated pricing and inventory fields"""
     # Check for duplicate SKU
-    existing = session.query(Product).filter(Product.sku == product_in.sku).first() if hasattr(session, "query") else None
+    existing = session.exec(select(Product).where(Product.sku == product_in.sku)).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Product with SKU '{product_in.sku}' already exists")
     

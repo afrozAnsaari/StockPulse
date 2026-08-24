@@ -1,173 +1,192 @@
-# Architecture Decision Records (ADRs)
+# StockPulse Architecture Decision Records (ADRs)
 
-## 1. Choice of Backend Framework - FastAPI
+---
 
+## ADR 1: Commerce Strategy Layer & Domain Placement
+
+**Status**: Accepted  
 **Date**: August 24, 2026  
-**Status**: Accepted
+**Relevant Code**: [`backend/app/services/strategy/base.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/base.py), [`backend/app/services/strategy/rule_strategy.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/rule_strategy.py), [`backend/app/services/strategy/ai_strategy.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/ai_strategy.py)
 
 ### Context
-We needed a modern, high-performance Python web framework for building our API that supports asynchronous operations, automatic API documentation, and easy integration with machine learning services.
+Merchandising decision logic (pricing optimization and restocking calculations) is required in both synchronous on-demand HTTP endpoints (e.g. `POST /products/{id}/suggest-pricing`) and asynchronous background event triggers (e.g. order sales and stock updates). Duplicating pricing or reorder formulas inside API routers or background handlers leads to divergence, hard-to-test code, and tight coupling with specific LLM providers.
+
+### Options
+1. **Router-embedded logic**: Embed price calculations and LLM prompts directly inside FastAPI route handlers.
+2. **Fat SQLModel entities**: Place pricing and reorder logic inside SQLModel product methods.
+3. **Pluggable Strategy Pattern (Chosen)**: Encapsulate all pricing and replenishment logic behind unified abstract interfaces (`PricingStrategy`, `ReorderStrategy`, and `CommerceAdvisor`).
 
 ### Decision
-We chose FastAPI as our backend framework because:
-- Native support for async/await operations
-- Automatic generation of interactive API documentation (Swagger/OpenAPI)
-- Built-in data validation with Pydantic
-- Excellent performance comparable to Node.js and Go
-- Native WebSocket support for real-time updates
-- Easy integration with SQLAlchemy/SQLModel for ORM
-- Growing community and excellent documentation
+We adopted the Strategy Pattern. All commerce intelligence is decoupled into abstract interfaces in `services/strategy/base.py`. Both deterministic rule-based calculation (`RuleCommerceAdvisor`) and AI-powered intelligence (`AICommerceAdvisor`) adhere to the exact same contract. Routers and background workers only depend on the interface, never on concrete LLM details.
 
-### Consequences
-- Enables real-time WebSocket communication for live recommendation updates
-- Provides automatic API documentation at `/docs` and `/redoc`
-- Built-in data validation reduces bugs and improves API reliability
-- Asynchronous operations allow handling many concurrent requests efficiently
+### Tradeoffs
+- **Pros**: Clean testability with mocks, zero duplication between HTTP and background tasks, seamless runtime strategy switching, and clear extension seams for future strategies (e.g., `CompetitorAwareStrategy`).
+- **Cons**: Minor initial abstraction overhead with interface definitions.
 
-## 2. Choice of Frontend Framework - React with Vite
+---
 
+## ADR 2: Specialized Trigger Prompts with Unified Output Contracts
+
+**Status**: Accepted  
 **Date**: August 24, 2026  
-## 3. Database Choice - SQLite with SQLModel
-
-**Date**: August 24, 2026  
-**Status**: Accepted
+**Relevant Code**: [`backend/app/services/ai/prompts.py`](file:///c:/Users/zycus/myProject/backend/app/services/ai/prompts.py), [`backend/app/services/ai/parser.py`](file:///c:/Users/zycus/myProject/backend/app/services/ai/parser.py)
 
 ### Context
-We needed a database solution that would be easy to set up for development while being scalable for potential future production deployment.
+Inventory-low conditions and demand-spike conditions require fundamentally different domain reasoning. A generic LLM prompt that merely changes a trigger tag fails to capture nuanced economic trade-offs (such as margin preservation and stock rationing during scarcity vs. surge capture without customer friction during demand spikes). However, the downstream application and frontend merchandising console require predictable, strongly typed JSON payloads.
+
+### Options
+1. **Single Generic Prompt**: One prompt for all recommendation requests.
+2. **Split Trigger-Specific Prompts with Unified Schema Output (Chosen)**: Distinct prompt builders for `INVENTORY_LOW` and `DEMAND_SPIKE` that both produce strictly validated `PricingRecommendation` and `ReorderRecommendation` models.
 
 ### Decision
-We chose SQLite with SQLModel because:
-- SQLite requires zero configuration and is file-based
-- Perfect for development and easy to version control
-- SQLModel provides a unified interface for both SQL and NoSQL databases
-- Built-in integration with Pydantic for data validation
-- Can easily migrate to PostgreSQL for production with minimal code changes
-- Supports both synchronous and asynchronous operations
+We implemented specialized prompt builders:
+- `build_inventory_low_pricing_prompt` & `build_inventory_low_reorder_prompt`: Instruct the model to reason about inventory scarcity, remaining stock runway, price protection vs holding, and replenishment urgency.
+- `build_demand_spike_pricing_prompt` & `build_demand_spike_reorder_prompt`: Instruct the model to reason about surge velocity multiples, monetizing consumer surplus without price gouging, and accelerated inventory drain.
+- Category benchmark averages (e.g. category average 24h demand velocity) are calculated by the backend and injected directly into prompts rather than asking the LLM to invent them.
+- All outputs are parsed, sanitized, and validated using Pydantic models with strict guardrails (`0.3x <= price <= 3.0x`, quantity >= 1).
 
-### Consequences
-- Simple development setup with no external database dependencies
-- Easy to reset and reseed data during development
-- Type-safe database operations reduce errors
-- Smooth migration path to production databases
-## 5. Real-time Communication - WebSockets
+### Tradeoffs
+- **Pros**: High-quality, context-aware reasoning tailored to specific business conditions; predictable validation and error handling.
+- **Cons**: Requires maintaining two distinct prompt templates.
 
+---
+
+## ADR 3: Runtime Strategy Switching Without Restarts
+
+**Status**: Accepted  
 **Date**: August 24, 2026  
-**Status**: Accepted
+**Relevant Code**: [`backend/app/services/strategy/manager.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/manager.py), [`backend/app/api/routes.py`](file:///c:/Users/zycus/myProject/backend/app/api/routes.py)
 
 ### Context
-We needed to push AI recommendations to connected clients in real-time as soon as they become available, rather than requiring clients to poll for updates.
+During operations or live demonstrations, merchandisers need the ability to toggle between AI-assisted pricing (via LiteLLM gateway) and deterministic rule-based algorithms (e.g., in offline environments, during rate-limit events, or for regulatory compliance) without downtime or restarting the application.
+
+### Options
+1. **Environment-variable restart only**: Changing strategy requires editing `.env` and restarting the server.
+2. **Dynamic Strategy Manager (Chosen)**: A centralized `StrategyManager` singleton that resolves the active advisor at runtime and exposes `GET /config/strategy` and `PATCH /config/strategy`.
 
 ### Decision
-We implemented WebSocket communication because:
-- Bidirectional communication between client and server
-- Persistent connections reduce overhead
-- Native support in FastAPI
-- Wide browser support
-- Efficient for real-time updates
+We implemented `StrategyManager`. The active strategy defaults to `settings.ACTIVE_STRATEGY` but can be switched on-the-fly via the API or frontend UI header toggle. Both asynchronous event workers and synchronous endpoints retrieve the advisor via `strategy_manager.get_advisor()`.
 
-### Consequences
-- Instant delivery of recommendations to all connected clients
-- Reduced network traffic compared to polling
-- Enhanced user experience with immediate feedback
-## 7. Recommendation System Design - Event-Driven Triggers
+### Tradeoffs
+- **Pros**: Zero-downtime reconfiguration; instant toggling during live demos; extensible registry for future algorithms.
+- **Cons**: State is held in the running process memory (synchronized across workers if deployed multi-process).
 
+---
+
+## ADR 4: Autonomous Resilience & Automatic Rule-Based Fallback
+
+**Status**: Accepted  
 **Date**: August 24, 2026  
-**Status**: Accepted
+**Relevant Code**: [`backend/app/services/strategy/ai_strategy.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/ai_strategy.py), [`backend/app/services/ai/client.py`](file:///c:/Users/zycus/myProject/backend/app/services/ai/client.py)
 
 ### Context
-We needed to determine when to trigger AI recommendations based on business rules.
+External LLM gateways are subject to network timeouts, API quota exhaustion, connection drops, malformed JSON formatting, or hallucinations that generate absurd prices (e.g. $99,999 on a $25 t-shirt). An agentic commerce engine must NEVER drop background recommendation events or leave products in an unhandled state when AI calls fail.
+
+### Options
+1. **Fail-loud with HTTP error**: Raise 500 error and drop the recommendation.
+2. **Automatic Rule Fallback with Guardrails (Chosen)**: Catch any LLM failure (timeout, network error, schema violation, out-of-bounds price) and automatically delegate to `RulePricingStrategy` / `RuleReorderStrategy`.
 
 ### Decision
-We implemented event-driven triggers based on:
-- Stock level falling below reorder threshold
-- Demand velocity exceeding configured threshold
-- Status changes in products
+`AIPricingStrategy` and `AIReorderStrategy` catch `LLMClientError`, `AIValidationError`, and `Exception`. Upon any failure, they log a warning, execute the deterministic rule strategy, append an `[AI Fallback Applied]` audit note to the reasoning, and persist a valid suggestion. Absurd prices outside `[PRICE_MIN_MULTIPLIER * current_price, PRICE_MAX_MULTIPLIER * current_price]` immediately trigger the fallback path.
 
-### Consequences
-- Recommendations generated only when meaningful business events occur
-- Reduces unnecessary AI API calls
-- Ensures recommendations are contextually relevant
-- Provides clear audit trail of recommendation triggers
+### Tradeoffs
+- **Pros**: 100% availability guarantee; suggestions are always produced and never dropped; protects business from extreme pricing errors.
+- **Cons**: Fallback suggestions use deterministic heuristics instead of deep semantic reasoning.
 
-## 8. Configuration Management - Environment Variables
+---
 
+## ADR 5: Asynchronous Agentic Loop & Event Decoupling
+
+**Status**: Accepted  
 **Date**: August 24, 2026  
-**Status**: Accepted
+**Relevant Code**: [`backend/app/services/recommendation_engine.py`](file:///c:/Users/zycus/myProject/backend/app/services/recommendation_engine.py), [`backend/app/api/routes.py`](file:///c:/Users/zycus/myProject/backend/app/api/routes.py)
 
 ### Context
-We needed to manage configuration parameters that vary between environments (development, staging, production) and contain sensitive information.
+Operations such as `POST /products/{id}/orders` (sale simulation) and `PATCH /products/{id}/stock` (inventory adjustment) must execute with sub-50ms latency. Because LLM generation can take 2 to 10 seconds, recommendation reasoning must not block the transactional response.
+
+### Options
+1. **Synchronous in-request LLM calls**: Block the order HTTP response until LLM completes.
+2. **Heavy distributed queue (Celery/Kafka/RabbitMQ)**: Overkill for a lightweight service.
+3. **FastAPI BackgroundTasks Event Loop (Chosen)**: Non-blocking asynchronous task execution using native FastAPI background tasks and async worker functions.
 
 ### Decision
-We use environment variables for configuration:
-- LLM API keys stored securely
-- Database URLs configurable per environment
-- Feature flags for optional functionality
-- Pydantic BaseSettings for validation and type safety
+`create_order_transaction` and `update_product_stock` execute the inventory transaction atomically and return immediately. If an `INVENTORY_LOW` or `DEMAND_SPIKE` threshold is crossed, a background task `process_async_recommendations` is dispatched. The frontend Merchandising Console polls `GET /suggestions/pending` every 2.5 seconds to seamlessly detect and render newly generated recommendations.
 
-### Consequences
-- Secure handling of sensitive credentials
-- Easy environment-specific configuration
-- Type-safe configuration access
-- Standard approach compatible with deployment platforms
-- Slightly increased complexity in connection management
+### Tradeoffs
+- **Pros**: Blazing fast order response times; resilient architecture without external broker dependencies; simple local and demo execution.
+- **Cons**: Background tasks run within the FastAPI event loop; for massive enterprise scale, a Redis/Celery queue can be plugged in without changing domain logic.
 
-## 6. Data Modeling - Separate Product and Order Entities
+---
 
+## ADR 6: Idempotency & Recommendation Deduplication Guard
+
+**Status**: Accepted  
 **Date**: August 24, 2026  
-**Status**: Accepted
+**Relevant Code**: [`backend/app/services/recommendation_engine.py`](file:///c:/Users/zycus/myProject/backend/app/services/recommendation_engine.py)
 
 ### Context
-We needed to represent both static product information and dynamic transaction data in our system.
+If multiple simulated orders occur in rapid succession while a product is below threshold, multiple identical `INVENTORY_LOW` recommendation tasks would be dispatched. Creating duplicate pending suggestions for the same product, trigger reason, and suggestion type confuses merchandisers and creates review queue clutter.
+
+### Options
+1. **Allow duplicate suggestions**: Clutters database and review queue.
+2. **Idempotency Guard on Pending Records (Chosen)**: Verify whether a `PENDING` suggestion already exists for `(product_id, trigger_reason, type)` before generating and persisting a new record.
 
 ### Decision
-We separated data into Product and Order entities:
-- Product entity contains static information with derived metrics
-- Order entity tracks transaction history
-- Demand velocity calculated from order frequency and quantity
-- Stock levels updated in real-time with each order
+Before generating a pricing or reorder suggestion, `recommendation_engine.py` checks `has_pending_pricing_suggestion` and `has_pending_reorder_suggestion`. If an active `PENDING` recommendation exists, generation is skipped idempotently. Once a merchandiser accepts or rejects the pending recommendation, subsequent trigger events can generate new recommendations.
 
-### Consequences
-- Normalized data structure reduces redundancy
-- Clear separation of concerns between product catalog and transaction data
-- Enables historical analysis of sales patterns
-- Supports accurate demand velocity calculations
+### Tradeoffs
+- **Pros**: Clean review queue; eliminates redundant LLM calls and duplicate proposals.
+- **Cons**: Minor database lookup overhead before recommendation generation.
 
-## 4. AI Integration Approach - Asynchronous Background Processing
+---
 
+## ADR 7: Human Checkpoint & State Machine Transitions
+
+**Status**: Accepted  
 **Date**: August 24, 2026  
-**Status**: Accepted
+**Relevant Code**: [`backend/app/services/state_service.py`](file:///c:/Users/zycus/myProject/backend/app/services/state_service.py), [`backend/app/core/crud.py`](file:///c:/Users/zycus/myProject/backend/app/core/crud.py)
 
 ### Context
-Our AI-powered recommendations rely on an external LLM API that can have variable response times. We needed to ensure that API responses aren't blocked by these potentially slow operations.
+In automated commerce, autonomous price updates can lead to unintended margin loss, brand damage, or race conditions. The system requires an explicit human-in-the-loop checkpoint (`OBSERVE → REASON → PROPOSE → HUMAN CHECKPOINT → ACT`).
+
+### Options
+1. **Autonomous auto-publishing**: AI modifies price immediately.
+2. **Explicit Human Review Checkpoint with State Machine (Chosen)**: Suggestions remain in `PENDING` status. Only explicit merchandiser approval via `PATCH /pricing-suggestions/{id}` or `PATCH /reorder-suggestions/{id}` mutates product state.
 
 ### Decision
-We implemented AI integration using asynchronous background processing:
-- FastAPI background tasks for non-blocking AI calls
-- WebSocket notifications for pushing recommendations to clients
-- Error handling for failed AI requests
-- Caching mechanisms for repeated requests
+We implemented formal lifecycle states:
+- `OUT_OF_STOCK`: Stock == 0.
+- `PRICE_REVIEW_PENDING`: Stock > 0 and one or more `PENDING` suggestions exist.
+- `ACTIVE`: Stock > 0 and all suggestions resolved (accepted/rejected).
+- Accepting a pricing suggestion updates `Product.current_price` atomically and transitions state.
+- Accepting a reorder suggestion atomically increments `Product.stock_level` by `recommended_quantity` (simulating an inbound replenishment shipment) and restores stock.
+- Double acceptance/rejection is prevented with validation checks (`400 Bad Request`).
 
-### Consequences
-- Immediate API responses improve user experience
-- Real-time updates through WebSockets provide instant feedback
-- System resilience against slow or failing AI services
-- Scalable architecture that can handle multiple concurrent AI requests
-**Status**: Accepted
+### Tradeoffs
+- **Pros**: Complete human control; auditability; zero unintended price changes; robust state consistency.
+- **Cons**: Requires merchandiser action to apply recommendations.
 
-### Context
-We needed a modern frontend framework that provides a responsive user interface for displaying real-time inventory data and AI recommendations.
+---
 
-### Decision
-We chose React with Vite because:
-- React provides a component-based architecture for building reusable UI elements
-- Vite offers extremely fast hot module replacement (HMR) and build times
-- Excellent ecosystem and community support
-- Strong TypeScript support
-- Efficient rendering with virtual DOM
-- Easy WebSocket integration for real-time updates
+## ADR 8: Technology Selection (FastAPI + React + SQLite/PostgreSQL)
 
-### Consequences
-- Fast development experience with instant feedback
-- Component-based architecture promotes reusability and maintainability
-- Efficient handling of real-time data updates through React hooks
-- Built-in development server with hot reloading
+**Status**: Accepted  
+**Date**: August 24, 2026  
+
+### Decision & Rationale
+- **FastAPI (Python 3.11+) over Spring Boot**: Native async/await, integrated Pydantic v2 validation, automatic OpenAPI/Swagger documentation, fast startup, and native Python LLM ecosystem integration.
+- **SQLModel / SQLAlchemy**: Unified ORM and schema layer providing zero-config local SQLite execution while maintaining 100% portability to PostgreSQL in production.
+- **React + Vite + TypeScript**: Fast hot module replacement (HMR), component-driven UI architecture, and strict type safety for merchandising workflows.
+- **Strict Folder Isolation**: Backend (`backend/`) and frontend (`frontend/`) maintain independent package manifests, dependencies, virtual environments, and build pipelines.
+
+---
+
+## ADR 9: Future Extension Seams (Sprint 2 Roadmap)
+
+**Status**: Proposed / Planned  
+
+The architecture is deliberately structured with pluggable seams for Sprint 2 enhancements:
+1. **Competitor Pricing & Catalog Sync**: `cost_price` and `supplier_id` are already present in `Product`. A new `CompetitorAwareStrategy` can implement `PricingStrategy` and register with `StrategyManager.register_strategy("competitor", CompetitorAwareStrategy())`.
+2. **Margin Floor Safeguards**: Enforce `recommended_price >= cost_price * (1 + margin_floor)`.
+3. **Automated Purchase Orders**: Accepting a `ReorderSuggestion` can emit an outbound PO payload to `supplier_id`.
+4. **Price Change Cooldowns**: Restrict frequency of price changes per SKU within a rolling 7-day window.
