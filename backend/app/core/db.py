@@ -1,13 +1,14 @@
-from sqlmodel import create_engine, Session
+from sqlmodel import create_engine, Session, SQLModel
 from app.core.config import settings
-from app.models.models import Product, Order
+from app.models.models import Product, Order, PricingSuggestion, ReorderSuggestion
 
-engine = create_engine(settings.DATABASE_URL, echo=True)
+# Enable SQLite multi-thread connection handling if sqlite
+connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
 
 
 def init_db():
-    Product.metadata.create_all(engine)
-    Order.metadata.create_all(engine)
+    SQLModel.metadata.create_all(engine)
 
 
 def get_session():

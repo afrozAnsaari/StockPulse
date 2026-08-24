@@ -1,14 +1,13 @@
 from datetime import datetime
 from typing import Optional
-from sqlmodel import Field, Relationship, SQLModel
 from enum import Enum
+from sqlmodel import Field, SQLModel
 
 
 class ProductCategory(str, Enum):
     ELECTRONICS = "ELECTRONICS"
     APPAREL = "APPAREL"
     HOME = "HOME"
-    OTHER = "OTHER"
 
 
 class ProductStatus(str, Enum):
@@ -17,9 +16,28 @@ class ProductStatus(str, Enum):
     OUT_OF_STOCK = "OUT_OF_STOCK"
 
 
+class PricingDirection(str, Enum):
+    INCREASE = "INCREASE"
+    DECREASE = "DECREASE"
+    HOLD = "HOLD"
+
+
+class SuggestionStatus(str, Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+
+
+class TriggerReason(str, Enum):
+    INITIAL = "INITIAL"
+    INVENTORY_LOW = "INVENTORY_LOW"
+    DEMAND_SPIKE = "DEMAND_SPIKE"
+    MANUAL = "MANUAL"
+
+
 class Product(SQLModel, table=True):
     id: str = Field(default=None, primary_key=True)
-    sku: str
+    sku: str = Field(index=True)
     name: str
     category: ProductCategory
     current_price: float
@@ -27,10 +45,42 @@ class Product(SQLModel, table=True):
     reorder_threshold: int
     demand_velocity: int = Field(default=0)
     status: ProductStatus = Field(default=ProductStatus.ACTIVE)
+    cost_price: Optional[float] = Field(default=None, nullable=True)
+    supplier_id: Optional[str] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PricingSuggestion(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    product_id: str = Field(foreign_key="product.id", index=True)
+    current_price: float
+    recommended_price: float
+    direction: PricingDirection
+    confidence: float
+    reasoning: str
+    status: SuggestionStatus = Field(default=SuggestionStatus.PENDING)
+    trigger_reason: TriggerReason = Field(default=TriggerReason.MANUAL)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ReorderSuggestion(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    product_id: str = Field(foreign_key="product.id", index=True)
+    current_stock: int
+    recommended_quantity: int
+    suggested_lead_time_days: int = Field(default=5)
+    confidence: float
+    reasoning: str
+    status: SuggestionStatus = Field(default=SuggestionStatus.PENDING)
+    trigger_reason: TriggerReason = Field(default=TriggerReason.MANUAL)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class Order(SQLModel, table=True):
     order_id: Optional[int] = Field(default=None, primary_key=True)
-    product_id: str = Field(foreign_key="product.id")
-    quantity: int
+    product_id: str = Field(foreign_key="product.id", index=True)
+    quantity: int = Field(default=1)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
