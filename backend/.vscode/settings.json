@@ -1,0 +1,9 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.extraPaths": ["${workspaceFolder}"],
+  "terminal.integrated.env.windows": {
+    "UV_PYTHON_INSTALL_DIR": "${workspaceFolder}/.python",
+    "UV_PROJECT_ENVIRONMENT": "${workspaceFolder}/.venv"
+  }
+}

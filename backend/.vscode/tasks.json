@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "backend: install (uv)",
+      "type": "shell",
+      "command": "uv sync",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "UV_PYTHON_INSTALL_DIR": "${workspaceFolder}/.python",
+          "UV_PROJECT_ENVIRONMENT": "${workspaceFolder}/.venv"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "backend: run FastAPI",
+      "type": "shell",
+      "command": "uv run python run.py",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "UV_PYTHON_INSTALL_DIR": "${workspaceFolder}/.python",
+          "UV_PROJECT_ENVIRONMENT": "${workspaceFolder}/.venv"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "backend: seed database",
+      "type": "shell",
+      "command": "uv run python -c \"from app.core.db import init_db; from seed import seed_database; init_db(); seed_database()\"",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "UV_PYTHON_INSTALL_DIR": "${workspaceFolder}/.python",
+          "UV_PROJECT_ENVIRONMENT": "${workspaceFolder}/.venv"
+        }
+      },
+      "problemMatcher": []
+    }
+  ]
+}
