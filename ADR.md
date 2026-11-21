@@ -6,7 +6,7 @@
 
 **Status**: Accepted  
 **Date**: August 24, 2026  
-**Relevant Code**: [`backend/app/services/strategy/base.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/base.py), [`backend/app/services/strategy/rule_strategy.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/rule_strategy.py), [`backend/app/services/strategy/ai_strategy.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/ai_strategy.py)
+**Relevant Code**: [`backend/app/services/strategy/base.py`](backend/app/services/strategy/base.py), [`backend/app/services/strategy/rule_strategy.py`](backend/app/services/strategy/rule_strategy.py), [`backend/app/services/strategy/ai_strategy.py`](backend/app/services/strategy/ai_strategy.py)
 
 ### Context
 Merchandising decision logic (pricing optimization and restocking calculations) is required in both synchronous on-demand HTTP endpoints (e.g. `POST /products/{id}/suggest-pricing`) and asynchronous background event triggers (e.g. order sales and stock updates). Duplicating pricing or reorder formulas inside API routers or background handlers leads to divergence, hard-to-test code, and tight coupling with specific LLM providers.
@@ -29,7 +29,7 @@ We adopted the Strategy Pattern. All commerce intelligence is decoupled into abs
 
 **Status**: Accepted  
 **Date**: August 24, 2026  
-**Relevant Code**: [`backend/app/services/ai/prompts.py`](file:///c:/Users/zycus/myProject/backend/app/services/ai/prompts.py), [`backend/app/services/ai/parser.py`](file:///c:/Users/zycus/myProject/backend/app/services/ai/parser.py)
+**Relevant Code**: [`backend/app/services/ai/prompts.py`](backend/app/services/ai/prompts.py), [`backend/app/services/ai/parser.py`](backend/app/services/ai/parser.py)
 
 ### Context
 Inventory-low conditions and demand-spike conditions require fundamentally different domain reasoning. A generic LLM prompt that merely changes a trigger tag fails to capture nuanced economic trade-offs (such as margin preservation and stock rationing during scarcity vs. surge capture without customer friction during demand spikes). However, the downstream application and frontend merchandising console require predictable, strongly typed JSON payloads.
@@ -55,10 +55,10 @@ We implemented specialized prompt builders:
 
 **Status**: Accepted  
 **Date**: August 24, 2026  
-**Relevant Code**: [`backend/app/services/strategy/manager.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/manager.py), [`backend/app/api/routes.py`](file:///c:/Users/zycus/myProject/backend/app/api/routes.py)
+**Relevant Code**: [`backend/app/services/strategy/manager.py`](backend/app/services/strategy/manager.py), [`backend/app/api/routes.py`](backend/app/api/routes.py)
 
 ### Context
-During operations or live demonstrations, merchandisers need the ability to toggle between AI-assisted pricing (via LiteLLM gateway) and deterministic rule-based algorithms (e.g., in offline environments, during rate-limit events, or for regulatory compliance) without downtime or restarting the application.
+During operations or live demonstrations, merchandisers need the ability to toggle between AI-assisted pricing (via an OpenAI-compatible LLM API) and deterministic rule-based algorithms (e.g., in offline environments, during rate-limit events, or for regulatory compliance) without downtime or restarting the application.
 
 ### Options
 1. **Environment-variable restart only**: Changing strategy requires editing `.env` and restarting the server.
@@ -77,7 +77,7 @@ We implemented `StrategyManager`. The active strategy defaults to `settings.ACTI
 
 **Status**: Accepted  
 **Date**: August 24, 2026  
-**Relevant Code**: [`backend/app/services/strategy/ai_strategy.py`](file:///c:/Users/zycus/myProject/backend/app/services/strategy/ai_strategy.py), [`backend/app/services/ai/client.py`](file:///c:/Users/zycus/myProject/backend/app/services/ai/client.py)
+**Relevant Code**: [`backend/app/services/strategy/ai_strategy.py`](backend/app/services/strategy/ai_strategy.py), [`backend/app/services/ai/client.py`](backend/app/services/ai/client.py)
 
 ### Context
 External LLM gateways are subject to network timeouts, API quota exhaustion, connection drops, malformed JSON formatting, or hallucinations that generate absurd prices (e.g. $99,999 on a $25 t-shirt). An agentic commerce engine must NEVER drop background recommendation events or leave products in an unhandled state when AI calls fail.
@@ -99,7 +99,7 @@ External LLM gateways are subject to network timeouts, API quota exhaustion, con
 
 **Status**: Accepted  
 **Date**: August 24, 2026  
-**Relevant Code**: [`backend/app/services/recommendation_engine.py`](file:///c:/Users/zycus/myProject/backend/app/services/recommendation_engine.py), [`backend/app/api/routes.py`](file:///c:/Users/zycus/myProject/backend/app/api/routes.py)
+**Relevant Code**: [`backend/app/services/recommendation_engine.py`](backend/app/services/recommendation_engine.py), [`backend/app/api/routes.py`](backend/app/api/routes.py)
 
 ### Context
 Operations such as `POST /products/{id}/orders` (sale simulation) and `PATCH /products/{id}/stock` (inventory adjustment) must execute with sub-50ms latency. Because LLM generation can take 2 to 10 seconds, recommendation reasoning must not block the transactional response.
@@ -122,7 +122,7 @@ Operations such as `POST /products/{id}/orders` (sale simulation) and `PATCH /pr
 
 **Status**: Accepted  
 **Date**: August 24, 2026  
-**Relevant Code**: [`backend/app/services/recommendation_engine.py`](file:///c:/Users/zycus/myProject/backend/app/services/recommendation_engine.py)
+**Relevant Code**: [`backend/app/services/recommendation_engine.py`](backend/app/services/recommendation_engine.py)
 
 ### Context
 If multiple simulated orders occur in rapid succession while a product is below threshold, multiple identical `INVENTORY_LOW` recommendation tasks would be dispatched. Creating duplicate pending suggestions for the same product, trigger reason, and suggestion type confuses merchandisers and creates review queue clutter.
@@ -144,7 +144,7 @@ Before generating a pricing or reorder suggestion, `recommendation_engine.py` ch
 
 **Status**: Accepted  
 **Date**: August 24, 2026  
-**Relevant Code**: [`backend/app/services/state_service.py`](file:///c:/Users/zycus/myProject/backend/app/services/state_service.py), [`backend/app/core/crud.py`](file:///c:/Users/zycus/myProject/backend/app/core/crud.py)
+**Relevant Code**: [`backend/app/services/state_service.py`](backend/app/services/state_service.py), [`backend/app/core/crud.py`](backend/app/core/crud.py)
 
 ### Context
 In automated commerce, autonomous price updates can lead to unintended margin loss, brand damage, or race conditions. The system requires an explicit human-in-the-loop checkpoint (`OBSERVE → REASON → PROPOSE → HUMAN CHECKPOINT → ACT`).

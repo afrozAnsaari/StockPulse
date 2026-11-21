@@ -117,7 +117,7 @@ export default function App() {
       await switchStrategy(target);
       setActiveStrategy(target);
       addToast(
-        `Switched strategy mode to: ${target.toUpperCase()} (${target === 'ai' ? 'LiteLLM Gateway' : 'Deterministic Rule Engine'})`,
+        `Switched strategy mode to: ${target.toUpperCase()} (${target === 'ai' ? 'LLM Advisor' : 'Deterministic Rule Engine'})`,
         'success'
       );
     } catch (err) {

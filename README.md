@@ -30,7 +30,7 @@ flowchart TB
             RuleStrat[Rule Commerce Advisor]
         end
 
-        LLM[LiteLLM Gateway / OpenAI Provider]
+        LLM[OpenAI-Compatible LLM API]
         DB[(SQLite / PostgreSQL)]
     end
 
@@ -155,11 +155,10 @@ ACTIVE_STRATEGY=ai
 # Database
 DATABASE_URL=sqlite:///./stockpulse.db
 
-# LLM Gateway Configuration
-LLM_BASE_URL=https://litellm-qc.zycus.net/v1
-LLM_MODEL=qwen-cursor
-LLM_API_KEY=your_llm_api_key_here
-LLM_PRODUCT=PC1
+# LLM Configuration (any OpenAI-compatible endpoint; default is Groq)
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=openai/gpt-oss-120b
+LLM_API_KEY=your_groq_api_key_here
 LLM_TIMEOUT_SECONDS=10.0
 
 # Commerce & Guardrail Parameters
@@ -225,7 +224,7 @@ tests\test_api.py ........................                               [100%]
 
 ## Architecture Decision Records (ADRs)
 
-Comprehensive architecture records are documented in [`ADR.md`](file:///c:/Users/zycus/myProject/ADR.md):
+Comprehensive architecture records are documented in [`ADR.md`](ADR.md):
 - **ADR 1**: Commerce Strategy Layer & Domain Placement
 - **ADR 2**: Specialized Trigger Prompts with Unified Output Contracts
 - **ADR 3**: Runtime Strategy Switching Without Restarts

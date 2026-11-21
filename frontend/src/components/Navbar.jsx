@@ -35,7 +35,7 @@ export default function Navbar({
             {activeStrategy === 'ai' ? (
               <>
                 <span className="ai-icon">✨</span>
-                <span>AI Advisor (qwen-cursor)</span>
+                <span>AI Advisor (LLM)</span>
               </>
             ) : (
               <>

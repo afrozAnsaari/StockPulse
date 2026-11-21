@@ -16,7 +16,7 @@ def seed_database(reset: bool = True):
         init_db()
     with Session(engine) as session:
 
-        # Exact products from problem specification
+        # Demo product catalog
         products = [
             Product(
                 id="PRD-001",

@@ -12,24 +12,22 @@ class LLMClientError(Exception):
 
 
 class LLMClient:
-    """HTTP client for LiteLLM OpenAI-compatible gateway"""
+    """HTTP client for any OpenAI-compatible chat completions API"""
 
     def __init__(
         self,
         base_url: Optional[str] = None,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
-        product: Optional[str] = None,
         timeout: Optional[float] = None
     ):
         self.base_url = (base_url or settings.LLM_BASE_URL).rstrip("/")
         self.api_key = api_key if api_key is not None else settings.LLM_API_KEY
         self.model = model or settings.LLM_MODEL
-        self.product = product or settings.LLM_PRODUCT
         self.timeout = timeout or settings.LLM_TIMEOUT_SECONDS
 
     async def generate(self, system_prompt: str, user_prompt: str) -> str:
-        """Call the LiteLLM chat completions endpoint and return message content"""
+        """Call the chat completions endpoint and return message content"""
         if not self.api_key:
             raise LLMClientError("LLM_API_KEY is not configured in environment")
 
@@ -37,7 +35,6 @@ class LLMClient:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "product": self.product
         }
 
         payload = {

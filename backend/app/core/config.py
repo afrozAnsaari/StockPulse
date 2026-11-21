@@ -7,11 +7,10 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "StockPulse"
     DATABASE_URL: str = "sqlite:///./stockpulse.db"
     
-    # LLM Configuration (LiteLLM private OpenAI-compatible gateway)
+    # LLM Configuration (any OpenAI-compatible endpoint; defaults to Groq)
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://litellm-qc.zycus.net/v1"
-    LLM_MODEL: str = "qwen-cursor"
-    LLM_PRODUCT: str = "PC1"
+    LLM_BASE_URL: str = "https://api.groq.com/openai/v1"
+    LLM_MODEL: str = "openai/gpt-oss-120b"
     LLM_TIMEOUT_SECONDS: float = 15.0
     
     # Strategy & Thresholds
